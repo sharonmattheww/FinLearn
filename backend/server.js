@@ -2,26 +2,26 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
-// Import the DB connection so it tests on startup
-require("./config/db");
+const pool = require("./config/db");
 
 const app = express();
 
 // ─── Middleware ───────────────────────────────────────────────
-// Parse incoming JSON request bodies
 app.use(express.json());
-
-// Allow requests from the frontend (different port = different origin)
+app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
-    origin: "http://localhost:5173", // Vite dev server default port
+    origin: "http://localhost:5173",
     credentials: true,
   }),
 );
 
-// ─── Health Check Route ───────────────────────────────────────
-// This is a simple test route to confirm the server is running.
-// Visit http://localhost:5000/api/health in your browser or Postman.
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// ─── Utility Routes ───────────────────────────────────────────
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "ok",
@@ -30,38 +30,71 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// ─── Routes (uncomment as each phase is built) ───────────────
-// const authRoutes = require('./routes/authRoutes');
-// const courseRoutes = require('./routes/courseRoutes');
-// const lessonRoutes = require('./routes/lessonRoutes');
-// const quizRoutes = require('./routes/quizRoutes');
-// const progressRoutes = require('./routes/progressRoutes');
+app.get("/api/test-db", async (req, res) => {
+  try {
+    const [users] = await pool.query("SELECT COUNT(*) AS count FROM users");
+    const [courses] = await pool.query("SELECT COUNT(*) AS count FROM courses");
+    const [lessons] = await pool.query("SELECT COUNT(*) AS count FROM lessons");
+    const [quizzes] = await pool.query("SELECT COUNT(*) AS count FROM quizzes");
+    const [questions] = await pool.query(
+      "SELECT COUNT(*) AS count FROM questions",
+    );
+    res.status(200).json({
+      status: "ok",
+      tables: {
+        users: users[0].count,
+        courses: courses[0].count,
+        lessons: lessons[0].count,
+        quizzes: quizzes[0].count,
+        questions: questions[0].count,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+// ─── Routes ───────────────────────────────────────────────────
+const authRoutes = require("./routes/authRoutes");
+const courseRoutes = require("./routes/courseRoutes");
+const lessonRoutes = require("./routes/lessonRoutes");
+const quizRoutes = require("./routes/quizRoutes");
+
+app.use("/api/auth", authRoutes);
+app.use("/api/courses", courseRoutes);
+app.use("/api/lessons", lessonRoutes);
+app.use("/api/quizzes", quizRoutes);
+
+// Uncomment later:
+// const progressRoutes    = require('./routes/progressRoutes');
 // const certificateRoutes = require('./routes/certificateRoutes');
-// const adminRoutes = require('./routes/adminRoutes');
-
-// app.use('/api/auth', authRoutes);
-// app.use('/api/courses', courseRoutes);
-// app.use('/api/lessons', lessonRoutes);
-// app.use('/api/quizzes', quizRoutes);
-// app.use('/api/progress', progressRoutes);
+// const adminRoutes       = require('./routes/adminRoutes');
+// app.use('/api/progress',     progressRoutes);
 // app.use('/api/certificates', certificateRoutes);
-// app.use('/api/admin', adminRoutes);
+// app.use('/api/admin',        adminRoutes);
 
-// ─── 404 Handler ─────────────────────────────────────────────
-// Catches any request that didn't match a route above
+// ─── 404 & Error ─────────────────────────────────────────────
 app.use((req, res) => {
-  res.status(404).json({ message: "Route not found" });
+  res
+    .status(404)
+    .json({
+      status: "error",
+      message: `Route not found: ${req.method} ${req.url}`,
+    });
 });
 
-// ─── Global Error Handler ─────────────────────────────────────
-// Catches any errors thrown inside route handlers
 app.use((err, req, res, next) => {
-  console.error("Server Error:", err.message);
-  res.status(500).json({ message: "Internal server error" });
+  console.error("Unhandled Error:", err.message);
+  res
+    .status(err.status || 500)
+    .json({ status: "error", message: err.message || "Internal server error" });
 });
 
-// ─── Start Server ─────────────────────────────────────────────
+// ─── Start ────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 FinLearn server running on http://localhost:${PORT}`);
+  console.log("───────────────────────────────────────────────");
+  console.log(`🚀 FinLearn server  → http://localhost:${PORT}`);
+  console.log(`🧠 Quizzes API      → http://localhost:${PORT}/api/quizzes`);
+  console.log("───────────────────────────────────────────────");
 });
