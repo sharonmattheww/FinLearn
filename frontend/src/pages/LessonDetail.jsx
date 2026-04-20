@@ -61,7 +61,7 @@ function LessonDetail() {
       await courseService.markLessonComplete(id);
       setCompleted(true);
       setSuccessMsg("Lesson marked as complete!");
-    } catch (err) {
+    } catch {
       setError("Failed to mark lesson complete. Please try again.");
     } finally {
       setCompleting(false);

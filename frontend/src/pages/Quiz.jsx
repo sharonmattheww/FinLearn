@@ -19,28 +19,40 @@ function Quiz() {
   const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
-    loadQuiz();
-  }, [id]);
+    let cancelled = false;
 
-  const loadQuiz = async () => {
-    setLoading(true);
-    setError("");
-    setResult(null);
-    setAnswers({});
+    const fetchQuiz = async () => {
+      setLoading(true);
+      setError("");
+      setResult(null);
+      setAnswers({});
 
-    try {
-      const data = await quizService.getQuizById(id);
-      setQuiz(data.quiz);
-    } catch (err) {
-      if (err.response?.status === 404) {
-        setError("Quiz not found.");
-      } else {
-        setError("Failed to load quiz. Please try again.");
+      try {
+        const data = await quizService.getQuizById(id);
+        if (!cancelled) {
+          setQuiz(data.quiz);
+        }
+      } catch (err) {
+        if (cancelled) return;
+
+        if (err.response?.status === 404) {
+          setError("Quiz not found.");
+        } else {
+          setError("Failed to load quiz. Please try again.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    fetchQuiz();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   const handleAnswerSelect = (questionId, selectedOption) => {
     setAnswers((prev) => ({
