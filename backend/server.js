@@ -16,11 +16,13 @@ app.use((req, res, next) => {
 
 // ─── Utility Routes ───────────────────────────────────────────
 app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    message: "FinLearn API is running",
-    timestamp: new Date().toISOString(),
-  });
+  res
+    .status(200)
+    .json({
+      status: "ok",
+      message: "FinLearn API is running",
+      timestamp: new Date().toISOString(),
+    });
 });
 
 app.get("/api/test-db", async (req, res) => {
@@ -51,24 +53,14 @@ app.get("/api/test-db", async (req, res) => {
   }
 });
 
-// ─── Routes ───────────────────────────────────────────────────
-const authRoutes = require("./routes/authRoutes");
-const courseRoutes = require("./routes/courseRoutes");
-const lessonRoutes = require("./routes/lessonRoutes");
-const quizRoutes = require("./routes/quizRoutes");
-const progressRoutes = require("./routes/progressRoutes");
-const certificateRoutes = require("./routes/certificateRoutes");
-
-app.use("/api/auth", authRoutes);
-app.use("/api/courses", courseRoutes);
-app.use("/api/lessons", lessonRoutes);
-app.use("/api/quizzes", quizRoutes);
-app.use("/api/progress", progressRoutes);
-app.use("/api/certificates", certificateRoutes);
-
-// Phase 9:
-// const adminRoutes = require('./routes/adminRoutes');
-// app.use('/api/admin', adminRoutes);
+// ─── All Routes ───────────────────────────────────────────────
+app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/courses", require("./routes/courseRoutes"));
+app.use("/api/lessons", require("./routes/lessonRoutes"));
+app.use("/api/quizzes", require("./routes/quizRoutes"));
+app.use("/api/progress", require("./routes/progressRoutes"));
+app.use("/api/certificates", require("./routes/certificateRoutes"));
+app.use("/api/admin", require("./routes/adminRoutes"));
 
 // ─── 404 & Error ─────────────────────────────────────────────
 app.use((req, res) => {
@@ -90,9 +82,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log("───────────────────────────────────────────────");
-  console.log(`🚀 FinLearn server      → http://localhost:${PORT}`);
-  console.log(
-    `🎓 Certificates API     → http://localhost:${PORT}/api/certificates`,
-  );
+  console.log(`🚀 FinLearn server  → http://localhost:${PORT}`);
+  console.log(`🔧 Admin API       → http://localhost:${PORT}/api/admin`);
   console.log("───────────────────────────────────────────────");
 });

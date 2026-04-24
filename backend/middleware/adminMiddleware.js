@@ -1,12 +1,23 @@
-// This middleware must always be used AFTER protect middleware.
-// protect puts req.user on the request — we check its role here.
+// adminOnly middleware
+// Must be used AFTER the protect middleware.
+// protect verifies the JWT and sets req.user.
+// adminOnly then checks if that user's role is 'admin'.
+
 const adminOnly = (req, res, next) => {
-  if (!req.user || req.user.role !== "admin") {
-    return res.status(403).json({
+  if (!req.user) {
+    return res.status(401).json({
       status: "error",
-      message: "Access denied. Admins only.",
+      message: "Not authenticated. Please login first.",
     });
   }
+
+  if (req.user.role !== "admin") {
+    return res.status(403).json({
+      status: "error",
+      message: "Access denied. This area is for administrators only.",
+    });
+  }
+
   next();
 };
 
