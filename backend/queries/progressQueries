@@ -1,0 +1,184 @@
+const pool = require("../config/db");
+
+// ─── Get progress for ALL courses for one user ────────────────
+// Returns each course with:
+//   - total lesson count
+//   - completed lesson count
+//   - completion percentage
+//   - next incomplete lesson (for "Continue Learning")
+const getAllProgressForUser = async (userId) => {
+  // Step 1: Get all courses with their total lesson counts
+  const [courses] = await pool.query(
+    `SELECT 
+       c.id          AS course_id,
+       c.title       AS course_title,
+       c.description AS course_description,
+       COUNT(l.id)   AS total_lessons
+     FROM courses c
+     LEFT JOIN lessons l ON l.course_id = c.id
+     GROUP BY c.id
+     ORDER BY c.id ASC`,
+  );
+
+  // Step 2: Get all completed lessons for this user
+  const [completed] = await pool.query(
+    `SELECT 
+       p.course_id,
+       COUNT(p.lesson_id) AS completed_lessons
+     FROM progress p
+     WHERE p.user_id = ? AND p.completed = TRUE
+     GROUP BY p.course_id`,
+    [userId],
+  );
+
+  // Step 3: Build a lookup map for completed counts
+  // { courseId: completedCount }
+  const completedMap = {};
+  completed.forEach((row) => {
+    completedMap[row.course_id] = parseInt(row.completed_lessons);
+  });
+
+  // Step 4: Get the next incomplete lesson per course
+  // For each course find the lowest order_number lesson NOT yet completed
+  const [nextLessons] = await pool.query(
+    `SELECT 
+       l.course_id,
+       l.id          AS lesson_id,
+       l.title       AS lesson_title,
+       l.order_number
+     FROM lessons l
+     WHERE l.id NOT IN (
+       SELECT p.lesson_id 
+       FROM progress p 
+       WHERE p.user_id = ? AND p.completed = TRUE
+     )
+     ORDER BY l.course_id ASC, l.order_number ASC`,
+    [userId],
+  );
+
+  // Build lookup: first next lesson per course
+  const nextLessonMap = {};
+  nextLessons.forEach((row) => {
+    if (!nextLessonMap[row.course_id]) {
+      nextLessonMap[row.course_id] = {
+        id: row.lesson_id,
+        title: row.lesson_title,
+        order_number: row.order_number,
+      };
+    }
+  });
+
+  // Step 5: Combine everything into one clean array
+  const progressData = courses.map((course) => {
+    const total = parseInt(course.total_lessons) || 0;
+    const done = completedMap[course.course_id] || 0;
+    const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+    const isComplete = done === total && total > 0;
+
+    return {
+      course_id: course.course_id,
+      course_title: course.course_title,
+      course_description: course.course_description,
+      total_lessons: total,
+      completed_lessons: done,
+      percentage: percent,
+      is_complete: isComplete,
+      next_lesson: isComplete ? null : nextLessonMap[course.course_id] || null,
+    };
+  });
+
+  return progressData;
+};
+
+// ─── Get progress for ONE specific course ─────────────────────
+const getCourseProgressForUser = async (userId, courseId) => {
+  // Total lessons in course
+  const [totalResult] = await pool.query(
+    `SELECT COUNT(*) AS total FROM lessons WHERE course_id = ?`,
+    [courseId],
+  );
+  const total = parseInt(totalResult[0].total) || 0;
+
+  // Completed lessons in this course
+  const [doneResult] = await pool.query(
+    `SELECT COUNT(*) AS done 
+     FROM progress 
+     WHERE user_id = ? AND course_id = ? AND completed = TRUE`,
+    [userId, courseId],
+  );
+  const done = parseInt(doneResult[0].done) || 0;
+
+  const percentage = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return { total_lessons: total, completed_lessons: done, percentage };
+};
+
+// ─── Get all completed lesson IDs for a user in a course ──────
+// Used to show tick marks on lesson list in CourseDetail
+const getCompletedLessonIds = async (userId, courseId) => {
+  const [rows] = await pool.query(
+    `SELECT lesson_id 
+     FROM progress 
+     WHERE user_id = ? AND course_id = ? AND completed = TRUE`,
+    [userId, courseId],
+  );
+  return rows.map((r) => r.lesson_id);
+};
+
+// ─── Get overall stats across all courses ────────────────────
+const getOverallStats = async (userId) => {
+  // Total lessons completed across ALL courses
+  const [completedResult] = await pool.query(
+    `SELECT COUNT(*) AS total_completed
+     FROM progress
+     WHERE user_id = ? AND completed = TRUE`,
+    [userId],
+  );
+
+  // Total lessons that exist
+  const [totalResult] = await pool.query(
+    `SELECT COUNT(*) AS total_lessons FROM lessons`,
+  );
+
+  // Courses fully completed
+  const [coursesResult] = await pool.query(
+    `SELECT COUNT(*) AS completed_courses
+     FROM (
+       SELECT 
+         p.course_id,
+         COUNT(p.lesson_id)                    AS done,
+         (SELECT COUNT(*) FROM lessons l 
+          WHERE l.course_id = p.course_id)     AS total
+       FROM progress p
+       WHERE p.user_id = ? AND p.completed = TRUE
+       GROUP BY p.course_id
+       HAVING done = total AND total > 0
+     ) AS sub`,
+    [userId],
+  );
+
+  // Quiz attempts stats
+  const [quizResult] = await pool.query(
+    `SELECT 
+       COUNT(*)                              AS total_attempts,
+       SUM(CASE WHEN (score/total)*100 >= 70 THEN 1 ELSE 0 END) AS passed_quizzes
+     FROM quiz_attempts
+     WHERE user_id = ?`,
+    [userId],
+  );
+
+  return {
+    total_lessons_completed: parseInt(completedResult[0].total_completed) || 0,
+    total_lessons_available: parseInt(totalResult[0].total_lessons) || 0,
+    courses_completed: parseInt(coursesResult[0].completed_courses) || 0,
+    total_quiz_attempts: parseInt(quizResult[0].total_attempts) || 0,
+    quizzes_passed: parseInt(quizResult[0].passed_quizzes) || 0,
+  };
+};
+
+module.exports = {
+  getAllProgressForUser,
+  getCourseProgressForUser,
+  getCompletedLessonIds,
+  getOverallStats,
+};

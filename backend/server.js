@@ -3,19 +3,12 @@ const cors = require("cors");
 require("dotenv").config();
 
 const pool = require("./config/db");
-
 const app = express();
 
 // ─── Middleware ───────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    credentials: true,
-  }),
-);
-
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -36,8 +29,11 @@ app.get("/api/test-db", async (req, res) => {
     const [courses] = await pool.query("SELECT COUNT(*) AS count FROM courses");
     const [lessons] = await pool.query("SELECT COUNT(*) AS count FROM lessons");
     const [quizzes] = await pool.query("SELECT COUNT(*) AS count FROM quizzes");
-    const [questions] = await pool.query(
-      "SELECT COUNT(*) AS count FROM questions",
+    const [progress] = await pool.query(
+      "SELECT COUNT(*) AS count FROM progress",
+    );
+    const [certificates] = await pool.query(
+      "SELECT COUNT(*) AS count FROM certificates",
     );
     res.status(200).json({
       status: "ok",
@@ -46,7 +42,8 @@ app.get("/api/test-db", async (req, res) => {
         courses: courses[0].count,
         lessons: lessons[0].count,
         quizzes: quizzes[0].count,
-        questions: questions[0].count,
+        progress: progress[0].count,
+        certificates: certificates[0].count,
       },
     });
   } catch (err) {
@@ -59,19 +56,19 @@ const authRoutes = require("./routes/authRoutes");
 const courseRoutes = require("./routes/courseRoutes");
 const lessonRoutes = require("./routes/lessonRoutes");
 const quizRoutes = require("./routes/quizRoutes");
+const progressRoutes = require("./routes/progressRoutes");
+const certificateRoutes = require("./routes/certificateRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/lessons", lessonRoutes);
 app.use("/api/quizzes", quizRoutes);
+app.use("/api/progress", progressRoutes);
+app.use("/api/certificates", certificateRoutes);
 
-// Uncomment later:
-// const progressRoutes    = require('./routes/progressRoutes');
-// const certificateRoutes = require('./routes/certificateRoutes');
-// const adminRoutes       = require('./routes/adminRoutes');
-// app.use('/api/progress',     progressRoutes);
-// app.use('/api/certificates', certificateRoutes);
-// app.use('/api/admin',        adminRoutes);
+// Phase 9:
+// const adminRoutes = require('./routes/adminRoutes');
+// app.use('/api/admin', adminRoutes);
 
 // ─── 404 & Error ─────────────────────────────────────────────
 app.use((req, res) => {
@@ -82,7 +79,6 @@ app.use((req, res) => {
       message: `Route not found: ${req.method} ${req.url}`,
     });
 });
-
 app.use((err, req, res, next) => {
   console.error("Unhandled Error:", err.message);
   res
@@ -94,7 +90,9 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log("───────────────────────────────────────────────");
-  console.log(`🚀 FinLearn server  → http://localhost:${PORT}`);
-  console.log(`🧠 Quizzes API      → http://localhost:${PORT}/api/quizzes`);
+  console.log(`🚀 FinLearn server      → http://localhost:${PORT}`);
+  console.log(
+    `🎓 Certificates API     → http://localhost:${PORT}/api/certificates`,
+  );
   console.log("───────────────────────────────────────────────");
 });
